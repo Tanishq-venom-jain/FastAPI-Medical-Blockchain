@@ -18,13 +18,12 @@ async def health_check():
 
 
 @api.post("/api/records/upload", response_model=RecordResponse)
-@role_required(UserRole.DOCTOR)
 async def upload_record(
     patient_email: Annotated[str, Form()],
     title: Annotated[str, Form()],
     notes: Annotated[Optional[str], Form()] = None,
     file: UploadFile = File(...),
-    current_user=Depends(get_current_user_data),
+    current_user=Depends(role_required(UserRole.DOCTOR)),
     supabase: Client = Depends(get_supabase_client),
 ):
     logging.info(f"Upload request from doctor: {current_user['email']}")

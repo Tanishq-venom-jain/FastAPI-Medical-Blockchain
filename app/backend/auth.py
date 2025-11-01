@@ -1,4 +1,5 @@
 import os
+import os
 from functools import wraps
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -41,17 +42,12 @@ def get_current_user_data(
 
 
 def role_required(required_role: str):
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            current_user = kwargs.get("current_user")
-            if not current_user or current_user.get("role") != required_role:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Operation not permitted. Requires '{required_role}' role.",
-                )
-            return await func(*args, **kwargs)
+    def role_checker(current_user: dict = Depends(get_current_user_data)):
+        if not current_user or current_user.get("role") != required_role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Operation not permitted. Requires '{required_role}' role.",
+            )
+        return current_user
 
-        return wrapper
-
-    return decorator
+    return role_checker
