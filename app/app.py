@@ -229,7 +229,7 @@ def record_card(record: Record) -> rx.Component:
                 src=record.get("qr_url", "/placeholder.svg"),
                 class_name="w-full h-40 object-cover rounded-t-lg",
             ),
-            href=f"/verify/{record['id']}",
+            href=f"/verify/{record.get('id', '')}",
             class_name="block",
         ),
         rx.el.div(
