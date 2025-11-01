@@ -229,12 +229,18 @@ def record_card(record: Record) -> rx.Component:
                 src=record.get("qr_url", "/placeholder.svg"),
                 class_name="w-full h-40 object-cover rounded-t-lg",
             ),
-            href=record.get("file_url", "#"),
-            is_external=True,
+            href=f"/verify/{record['id']}",
             class_name="block",
         ),
         rx.el.div(
-            rx.el.h3(record["title"], class_name="font-semibold text-gray-800"),
+            rx.el.a(
+                rx.el.h3(
+                    record["title"],
+                    class_name="font-semibold text-gray-800 hover:underline",
+                ),
+                href=record.get("file_url", "#"),
+                is_external=True,
+            ),
             rx.el.p(
                 f"Created: {record['created_at'][:10]}",
                 class_name="text-sm text-gray-500 mt-1",
