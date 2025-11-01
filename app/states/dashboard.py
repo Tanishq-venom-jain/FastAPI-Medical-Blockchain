@@ -1,0 +1,108 @@
+import reflex as rx
+from typing import TypedDict, Optional
+
+
+class NavItem(TypedDict):
+    label: str
+    icon: str
+    href: str
+
+
+class Record(TypedDict):
+    id: str
+    patient_id: str
+    doctor_id: str
+    file_url: str
+    file_hash: str
+    tx_hash: Optional[str]
+    notarization_status: str
+    qr_url: Optional[str]
+    title: str
+    notes: Optional[str]
+    created_at: str
+
+
+class DashboardState(rx.State):
+    """State for the dashboard page."""
+
+    nav_items: list[NavItem] = [
+        {"label": "Dashboard", "icon": "layout-dashboard", "href": "/dashboard"},
+        {"label": "Upload Record", "icon": "upload", "href": "/upload"},
+        {"label": "My Records", "icon": "files", "href": "/records"},
+        {"label": "Verify", "icon": "shield-check", "href": "/verify"},
+    ]
+    active_page: str = "Dashboard"
+    records: list[Record] = []
+    is_loading: bool = False
+    error_message: str = ""
+    current_user_role: str = ""
+    current_user_email: str = ""
+
+    @rx.event
+    def set_active_page(self, page: str):
+        self.active_page = page
+
+    @rx.event
+    def logout(self):
+        """Logs the user out and redirects to the login page."""
+        return rx.redirect("/")
+
+    @rx.event(background=True)
+    async def fetch_records(self):
+        async with self:
+            self.is_loading = True
+            self.error_message = ""
+        try:
+            from app.states.state import AuthState
+            import httpx
+            import logging
+            from app.states.state import AuthState
+
+            token = None
+            async with self:
+                auth_state = await self.get_state(AuthState)
+                token = auth_state.token
+            if not token:
+                async with self:
+                    self.error_message = (
+                        "Authentication token not found. Please log in."
+                    )
+                    self.is_loading = False
+                return
+            headers = {"Authorization": f"Bearer {token}"}
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "http://localhost:8000/api/records", headers=headers
+                )
+            response.raise_for_status()
+            records_data = response.json()
+            async with self:
+                self.records = records_data if records_data else []
+                if records_data and len(records_data) > 0:
+                    from app.backend.database import get_supabase_client
+                    from app.backend.auth import get_current_user_data
+
+                    supabase = get_supabase_client()
+            from app.backend.database import get_supabase_client
+            from app.backend.auth import get_current_user_data
+
+            supabase = get_supabase_client()
+            current_user = get_current_user_data(token, supabase)
+            async with self:
+                self.current_user_role = current_user.get("role", "")
+                self.current_user_email = current_user.get("email", "")
+        except httpx.HTTPStatusError as e:
+            logging.exception(f"Error fetching records: {e}")
+            async with self:
+                self.error_message = (
+                    f"Failed to fetch records: {e.response.status_code}"
+                )
+        except Exception as e:
+            logging.exception(
+                f"An unexpected error occurred while fetching records: {e}"
+            )
+            async with self:
+                self.error_message = "An unexpected error occurred."
+        finally:
+            async with self:
+                self.is_loading = False

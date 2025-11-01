@@ -1,0 +1,15 @@
+
+reflex==0.8.17
+psycopg[binary]>=3.1.8
+geoalchemy2>=0.18
+google-genai
+reflex-google-auth
+supabase
+qrcode[pil]
+pillow
+web3
+fastapi
+uvicorn
+python-multipart
+email-validator
+httpx
