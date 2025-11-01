@@ -40,7 +40,7 @@ async def upload_record(
         .single()
         .execute()
     )
-    if not patient_res.data or patient_res.data["role"] != UserRole.PATIENT:
+    if not patient_res.data or patient_res.data["role"] != UserRole.PATIENT.value:
         raise HTTPException(status_code=404, detail="Patient not found.")
     patient_id = patient_res.data["id"]
     file_content = await file.read()
