@@ -33,23 +33,27 @@ async def upload_record(
             status_code=400,
             detail=f"Unsupported file type: {file.content_type}. Please upload a PDF, PNG, or JPG.",
         )
-    patient_res = (
-        supabase.table("users")
-        .select("id, role")
-        .eq("email", patient_email)
-        .single()
-        .execute()
-    )
-    if not patient_res.data or patient_res.data["role"] != UserRole.PATIENT.value:
-        raise HTTPException(status_code=404, detail="Patient not found.")
-    patient_id = patient_res.data["id"]
-    file_content = await file.read()
-    file_hash = calculate_file_hash(file_content)
-    file_extension = file.filename.split(".")[-1]
-    file_path_in_storage = (
-        f"{current_user['id']}/{patient_id}/{file_hash}.{file_extension}"
-    )
     try:
+        patient_res = (
+            supabase.table("users")
+            .select("id, role")
+            .eq("email", patient_email)
+            .single()
+            .execute()
+        )
+        if not patient_res.data or patient_res.data["role"] != UserRole.PATIENT.value:
+            raise HTTPException(status_code=404, detail="Patient not found.")
+        patient_id = patient_res.data["id"]
+    except Exception as e:
+        logging.exception(f"Error validating patient '{patient_email}': {e}")
+        raise HTTPException(status_code=500, detail="Error validating patient details.")
+    try:
+        file_content = await file.read()
+        file_hash = calculate_file_hash(file_content)
+        file_extension = file.filename.split(".")[-1]
+        file_path_in_storage = (
+            f"{current_user['id']}/{patient_id}/{file_hash}.{file_extension}"
+        )
         supabase.storage.from_("records").upload(
             file_path_in_storage,
             file_content,
@@ -60,32 +64,44 @@ async def upload_record(
         )
     except Exception as e:
         logging.exception(f"Failed to upload file to Supabase: {e}")
-        raise HTTPException(status_code=500, detail="File upload failed.")
-    tx_hash = notarize_hash(file_hash)
-    notarization_status = "success" if tx_hash else "pending"
-    record_data = {
-        "patient_id": patient_id,
-        "doctor_id": str(current_user["id"]),
-        "file_url": file_url,
-        "file_hash": file_hash,
-        "tx_hash": tx_hash,
-        "notarization_status": notarization_status,
-        "title": title,
-        "notes": notes,
-    }
-    inserted_record_res = supabase.table("records").insert(record_data).execute()
-    if not inserted_record_res.data:
+        raise HTTPException(
+            status_code=500, detail="File upload failed during storage."
+        )
+    try:
+        tx_hash = notarize_hash(file_hash)
+        notarization_status = "success" if tx_hash else "pending"
+    except Exception as e:
+        logging.exception(f"Blockchain notarization failed: {e}")
+        tx_hash = None
+        notarization_status = "failed"
+    try:
+        record_data = {
+            "patient_id": patient_id,
+            "doctor_id": str(current_user["id"]),
+            "file_url": file_url,
+            "file_hash": file_hash,
+            "tx_hash": tx_hash,
+            "notarization_status": notarization_status,
+            "title": title,
+            "notes": notes,
+        }
+        inserted_record_res = supabase.table("records").insert(record_data).execute()
+        if not inserted_record_res.data:
+            raise Exception("No data returned from insert operation.")
+        new_record = inserted_record_res.data[0]
+    except Exception as e:
+        logging.exception(f"Failed to save record to database: {e}")
         try:
             supabase.storage.from_("records").remove([file_path_in_storage])
+            logging.info(f"Cleaned up orphaned file: {file_path_in_storage}")
         except Exception as remove_e:
             logging.exception(f"Failed to cleanup orphaned storage file: {remove_e}")
-        raise HTTPException(status_code=500, detail="Failed to save record.")
-    new_record = inserted_record_res.data[0]
-    record_id = new_record["id"]
-    frontend_url = "http://localhost:3000"
-    qr_code_bytes = generate_qr_code(record_id, tx_hash, frontend_url)
-    qr_path = f"{record_id}_qr.png"
+        raise HTTPException(status_code=500, detail="Failed to save record metadata.")
     try:
+        record_id = new_record["id"]
+        frontend_url = "http://localhost:3000"
+        qr_code_bytes = generate_qr_code(record_id, tx_hash, frontend_url)
+        qr_path = f"{record_id}_qr.png"
         supabase.storage.from_("qrcodes").upload(
             qr_path, qr_code_bytes, file_options={"content-type": "image/png"}
         )
@@ -99,9 +115,9 @@ async def upload_record(
         )
         return RecordResponse(**updated_record)
     except Exception as e:
-        logging.exception(f"Failed to upload QR code or update record: {e}")
+        logging.exception(f"Failed to upload QR code or finalize record: {e}")
         raise HTTPException(
-            status_code=500, detail="Failed to finalize record with QR code."
+            status_code=500, detail="Failed to generate and save QR code."
         )
 
 
