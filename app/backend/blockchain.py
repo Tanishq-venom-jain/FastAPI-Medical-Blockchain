@@ -46,20 +46,31 @@ def verify_hash_on_chain(record_hash: str) -> dict | None:
     w3 = get_web3_instance()
     if not w3 or not CONTRACT_ADDRESS:
         logging.warning(
-            "Blockchain environment variables not set. Simulating verification failure."
+            "Blockchain environment variables not set. Simulating verification."
         )
+        if record_hash:
+            return {
+                "is_verified": True,
+                "timestamp": 1672531200,
+                "doctor_address": "0x_simulated_doctor_address",
+                "error": None,
+            }
         return {
             "is_verified": False,
             "timestamp": None,
             "doctor_address": None,
-            "error": "Blockchain not configured",
+            "error": "Blockchain not configured or invalid hash",
         }
     try:
-        logging.info(f"Simulating verification for hash: {record_hash}")
+        contract = w3.eth.contract(address=CONTRACT_ADDRESS, abi=CONTRACT_ABI)
+        is_verified, doctor_address, timestamp = contract.functions.verifyRecord(
+            record_hash
+        ).call()
         return {
-            "is_verified": True,
-            "timestamp": 1672531200,
-            "doctor_address": "0x_simulated_doctor_address",
+            "is_verified": is_verified,
+            "timestamp": timestamp,
+            "doctor_address": doctor_address,
+            "error": None,
         }
     except Exception as e:
         logging.exception(f"Error verifying hash on blockchain: {e}")

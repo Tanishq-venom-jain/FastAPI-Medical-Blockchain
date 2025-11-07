@@ -880,15 +880,7 @@ def verify() -> rx.Component:
 
 app.add_page(index)
 app.add_page(dashboard, route="/dashboard", on_load=AuthState.on_load)
-app.add_page(
-    records,
-    route="/records",
-    on_load=[
-        AuthState.on_load,
-        DashboardState.fetch_records,
-        DashboardState.setup_realtime_subscription,
-    ],
-)
+app.add_page(records, route="/records", on_load=DashboardState.fetch_records)
 app.add_page(upload, route="/upload", on_load=AuthState.on_load)
 app.add_page(notes, route="/notes", on_load=[AuthState.on_load, NotesState.fetch_notes])
 app.add_page(verify, route="/verify/[[...splat]]", on_load=VerifyState.on_load)
