@@ -33,7 +33,7 @@ class VerifyState(rx.State):
     def on_load(self):
         """Handle page load, checking for a record ID in the URL."""
         splat = self.router.page.params.get("splat", [])
-        if splat:
+        if splat and splat[0] and ("[[...splat]]" not in splat[0]):
             self.record_id_input = splat[0]
             return VerifyState.verify_record
 
