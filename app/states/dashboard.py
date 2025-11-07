@@ -108,19 +108,13 @@ class DashboardState(rx.State):
                 )
             response.raise_for_status()
             records_data = response.json()
-            async with self:
-                self.records = records_data if records_data else []
-                if records_data and len(records_data) > 0:
-                    from app.backend.database import get_supabase_client
-                    from app.backend.auth import get_current_user_data
-
-                    supabase = get_supabase_client()
             from app.backend.database import get_supabase_client
             from app.backend.auth import get_current_user_data
 
             supabase = get_supabase_client()
             current_user = get_current_user_data(token, supabase)
             async with self:
+                self.records = records_data if records_data else []
                 self.current_user_role = current_user.get("role", "")
                 self.current_user_email = current_user.get("email", "")
         except httpx.HTTPStatusError as e:

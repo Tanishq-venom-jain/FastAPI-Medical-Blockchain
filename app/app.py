@@ -84,13 +84,30 @@ def index() -> rx.Component:
                     AuthState.error_message != "",
                     rx.el.div(
                         rx.icon(
-                            "flag_triangle_right", class_name="h-5 w-5 text-red-600"
+                            rx.cond(
+                                AuthState.error_message.contains("successful"),
+                                "check-circle-2",
+                                "alert-triangle",
+                            ),
+                            class_name=rx.cond(
+                                AuthState.error_message.contains("successful"),
+                                "h-5 w-5 text-green-600",
+                                "h-5 w-5 text-red-600",
+                            ),
                         ),
                         rx.el.p(
                             AuthState.error_message,
-                            class_name="text-red-600 font-medium text-sm",
+                            class_name=rx.cond(
+                                AuthState.error_message.contains("successful"),
+                                "text-green-700 font-medium text-sm",
+                                "text-red-600 font-medium text-sm",
+                            ),
                         ),
-                        class_name="flex items-center gap-2 p-3 mt-4 bg-red-50 border border-red-200 rounded-lg text-left",
+                        class_name=rx.cond(
+                            AuthState.error_message.contains("successful"),
+                            "flex items-center gap-3 p-3 mt-4 bg-green-50 border border-green-200 rounded-lg text-left",
+                            "flex items-center gap-3 p-3 mt-4 bg-red-50 border border-red-200 rounded-lg text-left",
+                        ),
                     ),
                 ),
                 rx.el.div(

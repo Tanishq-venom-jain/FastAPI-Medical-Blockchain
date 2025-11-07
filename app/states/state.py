@@ -48,17 +48,20 @@ class AuthState(rx.State):
                             "role": self.selected_role,
                         }
                         supabase.table("users").insert(user_data).execute()
-                        self.error_message = (
-                            "Signup successful! Please check your email to confirm."
-                        )
+                        self.error_message = "Signup successful! Please check your email to confirm before logging in."
                         self.is_signup = False
+                        self.email = ""
+                        self.password = ""
                     else:
                         self.error_message = (
                             "Could not sign up user. Check password strength or logs."
                         )
                 except Exception as sign_up_error:
                     logging.exception(f"Error during sign up: {sign_up_error}")
-                    if "already registered" in str(sign_up_error).lower():
+                    if (
+                        "already registered" in str(sign_up_error).lower()
+                        or "user already registered" in str(sign_up_error).lower()
+                    ):
                         self.error_message = (
                             "This email is already registered. Please log in."
                         )
