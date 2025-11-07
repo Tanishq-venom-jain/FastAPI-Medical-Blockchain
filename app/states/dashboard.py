@@ -1,5 +1,6 @@
 import reflex as rx
-from typing import TypedDict, Optional
+from typing import TypedDict, Optional, Any
+import logging
 
 
 class NavItem(TypedDict):
@@ -65,10 +66,59 @@ class DashboardState(rx.State):
     error_message: str = ""
     current_user_role: str = ""
     current_user_email: str = ""
+    current_user_id: str = ""
 
     @rx.event
     def toggle_mobile_menu(self):
         self.is_mobile_menu_open = not self.is_mobile_menu_open
+
+    @rx.event(background=True)
+    async def handle_new_record_notification(self, payload: dict):
+        """Handles the realtime payload and shows a toast notification."""
+        async with self:
+            yield rx.toast.info(
+                "A new medical record has been uploaded.",
+                description="Click the button to see the latest updates.",
+                action=rx.el.button(
+                    "Refresh", on_click=DashboardState.fetch_records, size="1"
+                ),
+                duration=10000,
+            )
+
+    @rx.event(background=True)
+    async def setup_realtime_subscription(self):
+        """Sets up the Supabase realtime subscription for new records."""
+        async with self:
+            if self.current_user_role != "patient" or not self.current_user_id:
+                return
+        try:
+            from app.backend.database import get_supabase_client
+            import asyncio
+
+            client = get_supabase_client()
+            channel = client.channel("record-changes")
+
+            @rx.event
+            async def on_new_record_sync(payload):
+                await self.handle_new_record_notification(payload)
+
+            channel.on_postgres_changes(
+                event="INSERT",
+                schema="public",
+                table="records",
+                filter=f"patient_id=eq.{self.current_user_id}",
+                callback=on_new_record_sync,
+            )
+            channel.subscribe()
+            logging.info(
+                f"Subscribed to record updates for patient_id: {self.current_user_id}"
+            )
+            while True:
+                await asyncio.sleep(60)
+        except Exception as e:
+            logging.exception(
+                f"Could not set up realtime subscription. This might be because the 'records' table is not enabled for realtime. SQL to enable: ALTER PUBLICATION supabase_realtime ADD TABLE records; Error: {e}"
+            )
 
     @rx.event
     def set_active_page(self, page: str):
@@ -87,8 +137,6 @@ class DashboardState(rx.State):
         try:
             from app.states.state import AuthState
             import httpx
-            import logging
-            from app.states.state import AuthState
 
             token = None
             async with self:
@@ -117,6 +165,7 @@ class DashboardState(rx.State):
                 self.records = records_data if records_data else []
                 self.current_user_role = current_user.get("role", "")
                 self.current_user_email = current_user.get("email", "")
+                self.current_user_id = current_user.get("id", "")
         except httpx.HTTPStatusError as e:
             logging.exception(f"Error fetching records: {e}")
             async with self:
