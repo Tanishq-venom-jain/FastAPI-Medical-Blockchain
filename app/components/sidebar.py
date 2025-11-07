@@ -37,6 +37,8 @@ def sidebar() -> rx.Component:
                 ),
                 class_name="flex-1 overflow-auto py-4",
             ),
+            class_name="flex h-full flex-col",
         ),
-        class_name="hidden border-r bg-white md:flex md:flex-col w-64",
+        class_name="fixed inset-y-0 left-0 z-30 w-64 -translate-x-full border-r bg-white transition-transform lg:translate-x-0 lg:static",
+        transform=rx.cond(DashboardState.is_mobile_menu_open, "translateX(0)", ""),
     )

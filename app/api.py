@@ -170,3 +170,103 @@ async def verify_record_endpoint(
         },
         "verification": verification_details,
     }
+
+
+from app.backend.models import NoteCreate, NoteUpdate, NoteResponse, MedicineInput
+from app.backend.gemini_service import get_medicine_alternatives, MedicineInfo
+
+
+@api.post("/api/ai/medicine-alternatives", response_model=Optional[MedicineInfo])
+async def medicine_alternatives(
+    request: MedicineInput, current_user=Depends(get_current_user_data)
+):
+    logging.info(
+        f"Medicine alternative request for '{request.medicine_name}' from user: {current_user['email']}"
+    )
+    alternatives = get_medicine_alternatives(request.medicine_name)
+    if not alternatives:
+        raise HTTPException(
+            status_code=503, detail="AI service is currently unavailable."
+        )
+    return alternatives
+
+
+@api.post("/api/notes", response_model=NoteResponse)
+async def create_note(
+    note_in: NoteCreate,
+    current_user=Depends(role_required(UserRole.PATIENT)),
+    supabase: Client = Depends(get_supabase_client),
+):
+    try:
+        note_data = note_in.dict()
+        note_data["patient_id"] = str(current_user["id"])
+        inserted_note_res = supabase.table("notes").insert(note_data).execute()
+        if not inserted_note_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create note.")
+        return NoteResponse(**inserted_note_res.data[0])
+    except Exception as e:
+        logging.exception(f"Error creating note: {e}")
+        raise HTTPException(status_code=500, detail="Could not create note.")
+
+
+@api.get("/api/notes", response_model=list[NoteResponse])
+async def get_notes(
+    current_user=Depends(role_required(UserRole.PATIENT)),
+    supabase: Client = Depends(get_supabase_client),
+):
+    user_id = str(current_user["id"])
+    notes_res = (
+        supabase.table("notes")
+        .select("*")
+        .eq("patient_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    return [NoteResponse(**note) for note in notes_res.data]
+
+
+@api.put("/api/notes/{note_id}", response_model=NoteResponse)
+async def update_note(
+    note_id: str,
+    note_in: NoteUpdate,
+    current_user=Depends(role_required(UserRole.PATIENT)),
+    supabase: Client = Depends(get_supabase_client),
+):
+    user_id = str(current_user["id"])
+    existing_note_res = (
+        supabase.table("notes")
+        .select("id")
+        .eq("id", note_id)
+        .eq("patient_id", user_id)
+        .single()
+        .execute()
+    )
+    if not existing_note_res.data:
+        raise HTTPException(status_code=404, detail="Note not found or access denied.")
+    updated_note_res = (
+        supabase.table("notes").update(note_in.dict()).eq("id", note_id).execute()
+    )
+    if not updated_note_res.data:
+        raise HTTPException(status_code=500, detail="Failed to update note.")
+    return NoteResponse(**updated_note_res.data[0])
+
+
+@api.delete("/api/notes/{note_id}", status_code=204)
+async def delete_note(
+    note_id: str,
+    current_user=Depends(role_required(UserRole.PATIENT)),
+    supabase: Client = Depends(get_supabase_client),
+):
+    user_id = str(current_user["id"])
+    delete_res = (
+        supabase.table("notes")
+        .delete()
+        .eq("id", note_id)
+        .eq("patient_id", user_id)
+        .execute()
+    )
+    if not delete_res.data:
+        raise HTTPException(
+            status_code=404, detail="Note not found or could not be deleted."
+        )
+    return

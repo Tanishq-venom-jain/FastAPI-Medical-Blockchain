@@ -72,7 +72,23 @@ class AuthState(rx.State):
                     if response.user and response.session:
                         logging.info(f"Login successful for {response.user.email}")
                         self.token = response.session.access_token
-                        yield rx.redirect("/dashboard")
+                        user_role_res = (
+                            supabase.table("users")
+                            .select("role")
+                            .eq("id", str(response.user.id))
+                            .single()
+                            .execute()
+                        )
+                        if user_role_res.data:
+                            role = user_role_res.data.get("role")
+                            if role == "doctor":
+                                yield rx.redirect("/upload")
+                            elif role == "patient":
+                                yield rx.redirect("/records")
+                            else:
+                                yield rx.redirect("/dashboard")
+                        else:
+                            yield rx.redirect("/dashboard")
                 except Exception as e:
                     logging.exception(f"Error during login: {e}")
                     self.error_message = "Invalid login credentials."

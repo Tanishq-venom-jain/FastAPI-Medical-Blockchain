@@ -16,11 +16,11 @@ class UploadState(rx.State):
     @rx.event
     async def handle_upload(self, files: list[rx.UploadFile]):
         if not files:
-            yield rx.toast.warning("No file selected.")
+            self.upload_error = "No file was selected for upload."
             return
         self.uploaded_file = files[0]
         self.upload_error = ""
-        yield rx.toast.info(f"Selected file: {files[0].filename}")
+        yield rx.toast.info(f"Selected file: {self.uploaded_file.filename}")
 
     @rx.event
     async def submit_record(self):

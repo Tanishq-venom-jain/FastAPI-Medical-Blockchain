@@ -26,3 +26,27 @@ class RecordResponse(BaseModel):
     title: str
     notes: Optional[str] = None
     created_at: str
+
+
+class NoteBase(BaseModel):
+    title: str
+    content: str
+
+
+class NoteCreate(NoteBase):
+    pass
+
+
+class NoteUpdate(NoteBase):
+    pass
+
+
+class NoteResponse(NoteBase):
+    id: str
+    patient_id: str
+    created_at: str
+    updated_at: str
+
+
+class MedicineInput(BaseModel):
+    medicine_name: str

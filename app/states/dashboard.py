@@ -25,18 +25,50 @@ class Record(TypedDict):
 class DashboardState(rx.State):
     """State for the dashboard page."""
 
-    nav_items: list[NavItem] = [
-        {"label": "Dashboard", "icon": "layout-dashboard", "href": "/dashboard"},
-        {"label": "Upload Record", "icon": "upload", "href": "/upload"},
-        {"label": "My Records", "icon": "files", "href": "/records"},
-        {"label": "Verify", "icon": "shield-check", "href": "/verify"},
-    ]
+    is_mobile_menu_open: bool = False
+
+    @rx.var
+    def nav_items(self) -> list[NavItem]:
+        base_items = [
+            {"label": "Dashboard", "icon": "layout-dashboard", "href": "/dashboard"},
+            {"label": "My Records", "icon": "files", "href": "/records"},
+            {"label": "Verify", "icon": "shield-check", "href": "/verify"},
+        ]
+        if self.current_user_role == "doctor":
+            base_items.insert(
+                1, {"label": "Upload Record", "icon": "upload", "href": "/upload"}
+            )
+        if self.current_user_role == "patient":
+            base_items.append(
+                {"label": "My Notes", "icon": "notebook-pen", "href": "/notes"}
+            )
+        return base_items
+
     active_page: str = "Dashboard"
     records: list[Record] = []
     is_loading: bool = False
+
+    @rx.var
+    def total_records(self) -> int:
+        return len(self.records)
+
+    @rx.var
+    def verified_records(self) -> int:
+        return sum(
+            (1 for r in self.records if r.get("notarization_status") == "success")
+        )
+
+    @rx.var
+    def pending_records(self) -> int:
+        return self.total_records - self.verified_records
+
     error_message: str = ""
     current_user_role: str = ""
     current_user_email: str = ""
+
+    @rx.event
+    def toggle_mobile_menu(self):
+        self.is_mobile_menu_open = not self.is_mobile_menu_open
 
     @rx.event
     def set_active_page(self, page: str):

@@ -123,23 +123,29 @@ from app.components.sidebar import sidebar
 def dashboard_header() -> rx.Component:
     return rx.el.header(
         rx.el.div(
+            rx.el.button(
+                rx.icon("menu", class_name="h-6 w-6"),
+                on_click=DashboardState.toggle_mobile_menu,
+                class_name="lg:hidden",
+            ),
             rx.el.div(
                 rx.el.p("Welcome,", class_name="text-sm text-gray-500"),
                 rx.el.h1(
-                    AuthState.email, class_name="text-lg font-semibold text-gray-800"
+                    DashboardState.current_user_email,
+                    class_name="text-lg font-semibold text-gray-800",
                 ),
-                class_name="flex flex-col",
+                class_name="hidden md:flex flex-col",
             ),
             class_name="flex items-center gap-4",
         ),
         rx.el.div(
             rx.el.div(
                 rx.el.p(
-                    AuthState.selected_role.capitalize(),
+                    DashboardState.current_user_role.capitalize(),
                     class_name="text-sm font-medium",
                 ),
                 class_name=rx.cond(
-                    AuthState.selected_role == "doctor",
+                    DashboardState.current_user_role == "doctor",
                     "px-3 py-1 text-blue-800 bg-blue-100 rounded-full w-fit",
                     "px-3 py-1 text-green-800 bg-green-100 rounded-full w-fit",
                 ),
@@ -152,11 +158,13 @@ def dashboard_header() -> rx.Component:
             ),
             class_name="flex items-center gap-4",
         ),
-        class_name="flex items-center justify-between p-4 border-b bg-white",
+        class_name="flex items-center justify-between p-4 border-b bg-white sticky top-0 z-20",
     )
 
 
-def stat_card(icon: str, title: str, value: str, color_class: str) -> rx.Component:
+def stat_card(
+    icon: str, title: str, value: rx.Var[int], color_class: str
+) -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.icon(icon, class_name="h-6 w-6"),
@@ -164,7 +172,15 @@ def stat_card(icon: str, title: str, value: str, color_class: str) -> rx.Compone
         ),
         rx.el.div(
             rx.el.p(title, class_name="text-sm font-medium text-gray-500"),
-            rx.el.p(value, class_name="text-2xl font-bold text-gray-900"),
+            rx.cond(
+                DashboardState.is_loading,
+                rx.el.div(
+                    class_name="h-7 w-12 mt-1 bg-gray-200 rounded-md animate-pulse"
+                ),
+                rx.el.p(
+                    value.to_string(), class_name="text-2xl font-bold text-gray-900"
+                ),
+            ),
             class_name="flex flex-col",
         ),
         class_name="flex items-center gap-4 p-4 bg-white border border-gray-200 rounded-lg shadow-sm",
@@ -177,40 +193,294 @@ def dashboard() -> rx.Component:
         rx.el.div(
             dashboard_header(),
             rx.el.main(
-                rx.el.h2(
-                    "Analytics Overview",
-                    class_name="text-2xl font-bold mb-6 text-gray-900",
-                ),
                 rx.el.div(
-                    stat_card(
-                        "file-text", "Total Records", "0", "bg-blue-100 text-blue-600"
+                    rx.cond(
+                        DashboardState.is_mobile_menu_open,
+                        rx.el.div(
+                            class_name="fixed inset-0 bg-black/60 z-30",
+                            on_click=DashboardState.toggle_mobile_menu,
+                        ),
                     ),
-                    stat_card(
-                        "shield-check",
-                        "Verified Records",
-                        "0",
-                        "bg-green-100 text-green-600",
-                    ),
-                    stat_card(
-                        "clock",
-                        "Pending Verification",
-                        "0",
-                        "bg-yellow-100 text-yellow-600",
-                    ),
-                    class_name="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8",
-                ),
-                rx.el.div(
-                    rx.el.h3(
-                        "Recent Activity",
-                        class_name="text-xl font-semibold mb-4 text-gray-800",
+                    rx.el.h2(
+                        "Analytics Overview",
+                        class_name="text-2xl font-bold mb-6 text-gray-900",
                     ),
                     rx.el.div(
-                        rx.el.p("No recent activity.", class_name="text-gray-500"),
-                        class_name="p-6 text-center bg-white border border-gray-200 rounded-lg shadow-sm",
+                        stat_card(
+                            "file-text",
+                            "Total Records",
+                            DashboardState.total_records,
+                            "bg-blue-100 text-blue-600",
+                        ),
+                        stat_card(
+                            "shield-check",
+                            "Verified Records",
+                            DashboardState.verified_records,
+                            "bg-green-100 text-green-600",
+                        ),
+                        stat_card(
+                            "clock",
+                            "Pending Verification",
+                            DashboardState.pending_records,
+                            "bg-yellow-100 text-yellow-600",
+                        ),
+                        class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8",
                     ),
-                    class_name="mt-8",
+                    rx.el.div(
+                        rx.el.h3(
+                            "Recent Activity",
+                            class_name="text-xl font-semibold mb-4 text-gray-800",
+                        ),
+                        rx.el.div(
+                            rx.el.p(
+                                "No recent activity to show.",
+                                class_name="text-gray-500",
+                            ),
+                            class_name="p-6 text-center bg-white border border-gray-200 rounded-lg shadow-sm",
+                        ),
+                        class_name="mt-8",
+                    ),
+                    class_name="flex-1 p-6",
                 ),
-                class_name="flex-1 p-6",
+                class_name="p-6 lg:p-8",
+            ),
+            class_name="flex flex-col flex-1 h-screen overflow-y-auto",
+        ),
+        class_name="flex min-h-screen w-full bg-gray-50/90 font-['Inter']",
+    )
+
+
+from app.states.notes import NotesState, Note
+
+
+def note_modal() -> rx.Component:
+    return rx.radix.primitives.dialog.root(
+        rx.radix.primitives.dialog.trigger(rx.fragment()),
+        rx.radix.primitives.dialog.content(
+            rx.radix.primitives.dialog.title(
+                rx.cond(NotesState.current_note_id, "Edit Note", "Create New Note")
+            ),
+            rx.el.form(
+                rx.el.div(
+                    rx.el.label("Title"),
+                    rx.el.input(
+                        name="title",
+                        class_name="w-full p-2 border rounded",
+                        default_value=NotesState.current_title,
+                        key=NotesState.current_note_id | "new",
+                    ),
+                    class_name="space-y-2",
+                ),
+                rx.el.div(
+                    rx.el.label("Content"),
+                    rx.el.textarea(
+                        name="content",
+                        default_value=NotesState.current_content,
+                        class_name="w-full p-2 border rounded",
+                        rows=8,
+                        key=NotesState.current_note_id | "new",
+                    ),
+                    class_name="space-y-2",
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cancel",
+                        on_click=NotesState.close_note_modal,
+                        type="button",
+                        class_name="px-4 py-2 bg-gray-200 rounded",
+                    ),
+                    rx.el.button(
+                        "Save Note",
+                        type="submit",
+                        class_name="px-4 py-2 bg-blue-600 text-white rounded",
+                    ),
+                    class_name="flex justify-end gap-4 mt-4",
+                ),
+                on_submit=NotesState.save_note,
+                class_name="space-y-4",
+            ),
+            style={"max_width": "500px"},
+        ),
+        open=NotesState.show_note_modal,
+        on_open_change=NotesState.set_show_note_modal,
+    )
+
+
+def note_card(note: Note) -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h3(note["title"], class_name="font-semibold text-lg"),
+            rx.el.p(
+                f"Last updated: {note['updated_at'][:10]}",
+                class_name="text-xs text-gray-500",
+            ),
+            class_name="flex justify-between items-start",
+        ),
+        rx.el.p(
+            note["content"].to_string()[:100] + "...",
+            class_name="text-sm text-gray-700 mt-2",
+        ),
+        rx.el.div(
+            rx.el.button(
+                rx.icon("copy", class_name="h-4 w-4 mr-1"),
+                "Edit",
+                on_click=lambda: NotesState.open_note_modal(note),
+                class_name="flex items-center text-xs font-medium text-blue-600",
+            ),
+            rx.el.button(
+                rx.icon("trash-2", class_name="h-4 w-4 mr-1"),
+                "Delete",
+                on_click=lambda: NotesState.delete_note(note["id"]),
+                class_name="flex items-center text-xs font-medium text-red-600",
+            ),
+            class_name="flex items-center gap-4 mt-4",
+        ),
+        class_name="bg-white p-4 rounded-lg shadow-sm border",
+    )
+
+
+def ai_medicine_assistant() -> rx.Component:
+    return rx.el.div(
+        rx.el.h2("AI Medicine Assistant", class_name="text-xl font-bold text-gray-800"),
+        rx.el.p(
+            "Get generic alternatives and price comparisons for your medicines.",
+            class_name="text-sm text-gray-500 mb-4",
+        ),
+        rx.el.div(
+            rx.el.input(
+                placeholder="Enter a medicine name (e.g., Aspirin)",
+                on_change=NotesState.set_medicine_input,
+                class_name="flex-1 px-4 py-2 border border-gray-300 rounded-l-lg focus:ring-blue-500 focus:border-blue-500",
+            ),
+            rx.el.button(
+                rx.icon("search", class_name="h-4 w-4 mr-2"),
+                "Get Alternatives",
+                on_click=NotesState.get_alternatives,
+                disabled=NotesState.is_fetching_alternatives,
+                class_name="flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-r-lg shadow-sm hover:bg-blue-700 disabled:opacity-50",
+            ),
+            class_name="flex w-full mb-4",
+        ),
+        rx.cond(
+            NotesState.is_fetching_alternatives,
+            rx.el.div(
+                rx.el.div(class_name="animate-pulse bg-gray-200 h-8 w-1/2 rounded-md"),
+                rx.el.div(
+                    class_name="animate-pulse bg-gray-200 h-24 w-full rounded-md mt-4"
+                ),
+                class_name="w-full p-4 border rounded-lg bg-white",
+            ),
+            rx.cond(
+                NotesState.alternatives_result,
+                rx.el.div(
+                    rx.el.h3(
+                        f"Alternatives for {NotesState.alternatives_result['medicine_name']}",
+                        class_name="font-semibold text-lg text-gray-900",
+                    ),
+                    rx.el.div(
+                        rx.foreach(
+                            NotesState.alternatives_result["generic_alternatives"],
+                            lambda alt: rx.el.div(
+                                rx.el.div(
+                                    rx.el.p(
+                                        alt["name"],
+                                        class_name="font-medium text-gray-800",
+                                    ),
+                                    rx.el.p(
+                                        alt["price_range"],
+                                        class_name="text-sm text-blue-600 font-semibold",
+                                    ),
+                                    class_name="flex justify-between items-center",
+                                ),
+                                class_name="p-3 bg-gray-50 rounded-md",
+                            ),
+                        ),
+                        class_name="space-y-2 mt-3",
+                    ),
+                    rx.el.p(
+                        NotesState.alternatives_result["notes"],
+                        class_name="text-xs text-gray-600 mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg",
+                    ),
+                    class_name="p-4 border rounded-lg bg-white mt-4",
+                ),
+                rx.cond(
+                    NotesState.alternatives_error != "",
+                    rx.el.div(
+                        rx.icon(
+                            "flag_triangle_right", class_name="h-5 w-5 text-red-500"
+                        ),
+                        rx.el.p(
+                            NotesState.alternatives_error,
+                            class_name="text-sm font-medium text-red-600",
+                        ),
+                        class_name="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg mt-4",
+                    ),
+                    None,
+                ),
+            ),
+        ),
+        class_name="bg-white p-6 rounded-lg shadow-sm border mb-8",
+    )
+
+
+def notes() -> rx.Component:
+    return rx.el.div(
+        sidebar(),
+        rx.el.div(
+            dashboard_header(),
+            rx.el.main(
+                rx.el.div(
+                    rx.cond(
+                        DashboardState.is_mobile_menu_open,
+                        rx.el.div(
+                            class_name="fixed inset-0 bg-black/60 z-10 lg:hidden",
+                            on_click=DashboardState.toggle_mobile_menu,
+                        ),
+                    ),
+                    note_modal(),
+                    rx.el.div(
+                        rx.el.h2(
+                            "My Notes", class_name="text-2xl font-bold text-gray-900"
+                        ),
+                        rx.el.button(
+                            rx.icon("circle-plus", class_name="h-4 w-4 mr-2"),
+                            "Add Note",
+                            on_click=lambda: NotesState.open_note_modal(),
+                            class_name="flex items-center px-4 py-2 bg-blue-600 text-white font-medium rounded-lg shadow-sm hover:bg-blue-700",
+                        ),
+                        class_name="flex justify-between items-center mb-6",
+                    ),
+                    ai_medicine_assistant(),
+                    rx.cond(
+                        NotesState.is_loading,
+                        rx.el.div(
+                            class_name="h-8 w-8 border-t-2 border-blue-600 rounded-full animate-spin"
+                        ),
+                        rx.cond(
+                            NotesState.notes,
+                            rx.el.div(
+                                rx.foreach(NotesState.notes, note_card),
+                                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+                            ),
+                            rx.el.div(
+                                rx.icon(
+                                    "notebook-pen", class_name="h-12 w-12 text-gray-400"
+                                ),
+                                rx.el.p(
+                                    "You don't have any notes yet.",
+                                    class_name="mt-4 text-gray-600 font-medium",
+                                ),
+                                rx.el.button(
+                                    "Create your first note",
+                                    on_click=lambda: NotesState.open_note_modal(),
+                                    class_name="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700",
+                                ),
+                                class_name="flex flex-col items-center justify-center p-12 bg-white border border-dashed rounded-lg",
+                            ),
+                        ),
+                    ),
+                ),
+                class_name="flex-1 p-6 lg:p-8",
             ),
             class_name="flex flex-col flex-1 h-screen overflow-y-auto",
         ),
@@ -266,35 +536,46 @@ def records() -> rx.Component:
         rx.el.div(
             dashboard_header(),
             rx.el.main(
-                rx.el.h2(
-                    "My Medical Records",
-                    class_name="text-2xl font-bold mb-6 text-gray-900",
-                ),
-                rx.cond(
-                    DashboardState.is_loading,
-                    rx.el.div(
+                rx.el.div(
+                    rx.cond(
+                        DashboardState.is_mobile_menu_open,
                         rx.el.div(
-                            class_name="h-8 w-8 border-t-2 border-blue-600 rounded-full animate-spin"
+                            class_name="fixed inset-0 bg-black/60 z-10 lg:hidden",
+                            on_click=DashboardState.toggle_mobile_menu,
                         ),
-                        class_name="flex justify-center items-center p-12",
+                    ),
+                    rx.el.h2(
+                        "My Medical Records",
+                        class_name="text-2xl font-bold mb-6 text-gray-900",
                     ),
                     rx.cond(
-                        DashboardState.records,
+                        DashboardState.is_loading,
                         rx.el.div(
-                            rx.foreach(DashboardState.records, record_card),
-                            class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
-                        ),
-                        rx.el.div(
-                            rx.icon("file-x-2", class_name="h-12 w-12 text-gray-400"),
-                            rx.el.p(
-                                "No medical records found.",
-                                class_name="mt-4 text-gray-600 font-medium",
+                            rx.el.div(
+                                class_name="h-8 w-8 border-t-2 border-blue-600 rounded-full animate-spin"
                             ),
-                            class_name="flex flex-col items-center justify-center p-12 bg-white border border-dashed border-gray-300 rounded-lg",
+                            class_name="flex justify-center items-center p-12",
+                        ),
+                        rx.cond(
+                            DashboardState.records,
+                            rx.el.div(
+                                rx.foreach(DashboardState.records, record_card),
+                                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+                            ),
+                            rx.el.div(
+                                rx.icon(
+                                    "file-x-2", class_name="h-12 w-12 text-gray-400"
+                                ),
+                                rx.el.p(
+                                    "No medical records found.",
+                                    class_name="mt-4 text-gray-600 font-medium",
+                                ),
+                                class_name="flex flex-col items-center justify-center p-12 bg-white border border-dashed border-gray-300 rounded-lg",
+                            ),
                         ),
                     ),
                 ),
-                class_name="flex-1 p-6",
+                class_name="flex-1 p-6 lg:p-8",
             ),
             class_name="flex flex-col flex-1 h-screen overflow-y-auto",
         ),
@@ -382,6 +663,9 @@ def upload() -> rx.Component:
                             "image/png": [".png"],
                             "image/jpeg": [".jpg", ".jpeg"],
                         },
+                        on_drop=UploadState.handle_upload(
+                            rx.upload_files(upload_id="upload1")
+                        ),
                     ),
                     rx.el.div(
                         rx.foreach(
@@ -405,17 +689,14 @@ def upload() -> rx.Component:
                     ),
                     rx.el.div(
                         rx.el.button(
-                            rx.icon("upload", class_name="h-4 w-4 mr-2"),
-                            "Select File",
-                            on_click=UploadState.handle_upload(
-                                rx.upload_files(upload_id="upload1")
-                            ),
-                            class_name="flex items-center justify-center px-4 py-2 border border-transparent font-medium rounded-md shadow-sm text-white bg-gray-600 hover:bg-gray-700 disabled:opacity-50",
-                        ),
-                        rx.el.button(
                             rx.icon("check", class_name="h-4 w-4 mr-2"),
                             "Submit Record",
-                            on_click=UploadState.submit_record,
+                            on_click=[
+                                UploadState.handle_upload(
+                                    rx.upload_files(upload_id="upload1")
+                                ),
+                                UploadState.submit_record,
+                            ],
                             disabled=UploadState.is_uploading,
                             class_name="flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50",
                         ),
@@ -582,6 +863,9 @@ def verify() -> rx.Component:
 
 app.add_page(index)
 app.add_page(dashboard, route="/dashboard", on_load=AuthState.on_load)
-app.add_page(records, route="/records", on_load=DashboardState.fetch_records)
+app.add_page(
+    records, route="/records", on_load=[AuthState.on_load, DashboardState.fetch_records]
+)
 app.add_page(upload, route="/upload", on_load=AuthState.on_load)
+app.add_page(notes, route="/notes", on_load=[AuthState.on_load, NotesState.fetch_notes])
 app.add_page(verify, route="/verify/[[...splat]]", on_load=VerifyState.on_load)
